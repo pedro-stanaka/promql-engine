@@ -4,6 +4,7 @@
 package logicalplan
 
 import (
+	"github.com/go-kit/log"
 	"math"
 	"regexp"
 	"testing"
@@ -202,8 +203,8 @@ remote(sum by (pod, region) (rate(http_requests_total[2m]) * 60))))`,
 		t.Run(tcase.name, func(t *testing.T) {
 			expr, err := parser.ParseExpr(tcase.expr)
 			testutil.Ok(t, err)
-
-			plan := New(expr, &Opts{Start: time.Unix(0, 0), End: time.Unix(0, 0)})
+			logger := log.NewNopLogger()
+			plan := New(expr, &Opts{Start: time.Unix(0, 0), End: time.Unix(0, 0), Logger: logger})
 			optimizedPlan := plan.Optimize(optimizers)
 			expectedPlan := cleanUp(replacements, tcase.expected)
 			testutil.Equals(t, expectedPlan, optimizedPlan.Expr().String())

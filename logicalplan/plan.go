@@ -5,10 +5,10 @@ package logicalplan
 
 import (
 	"fmt"
-	"time"
-
+	"github.com/go-kit/log"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/promql"
+	"time"
 
 	"github.com/thanos-io/promql-engine/parser"
 )
@@ -28,6 +28,7 @@ type Opts struct {
 	End           time.Time
 	Step          time.Duration
 	LookbackDelta time.Duration
+	Logger        log.Logger
 }
 
 func (o Opts) IsInstantQuery() bool {
@@ -44,8 +45,9 @@ type Optimizer interface {
 }
 
 type plan struct {
-	expr parser.Expr
-	opts *Opts
+	expr   parser.Expr
+	opts   *Opts
+	logger log.Logger
 }
 
 func New(expr parser.Expr, opts *Opts) Plan {

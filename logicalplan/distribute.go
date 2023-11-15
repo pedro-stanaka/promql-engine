@@ -5,12 +5,12 @@ package logicalplan
 
 import (
 	"fmt"
+	"github.com/go-kit/log/level"
+	"github.com/prometheus/prometheus/model/labels"
 	"math"
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/prometheus/prometheus/model/labels"
 
 	"github.com/thanos-io/promql-engine/api"
 	"github.com/thanos-io/promql-engine/parser"
@@ -24,7 +24,7 @@ type timeRange struct {
 type timeRanges []timeRange
 
 // minOverlap returns the smallest overlap between consecutive time ranges.
-func (trs timeRanges) minOverlap() time.Duration {
+func (trs timeRanges) minOverlap(opts *Opts) time.Duration {
 	var minEngineOverlap time.Duration = math.MaxInt64
 	if len(trs) == 1 {
 		return minEngineOverlap
@@ -35,7 +35,13 @@ func (trs timeRanges) minOverlap() time.Duration {
 		if overlap < minEngineOverlap {
 			minEngineOverlap = overlap
 		}
+		level.Debug(opts.Logger).Log("msg", "Engine is falling back to the store api",
+			"index", i,
+			"end", trs[i-1].end.UTC(),
+			"start", trs[i].start.UTC(),
+			"over_lap", minEngineOverlap)
 	}
+
 	return minEngineOverlap
 }
 
@@ -46,15 +52,19 @@ func (lrs labelSetRanges) addRange(key string, tr timeRange) {
 }
 
 // minOverlap returns the smallest overlap between all label set ranges.
-func (lrs labelSetRanges) minOverlap() time.Duration {
+func (lrs labelSetRanges) minOverlap(opts *Opts) time.Duration {
 	var minLabelsetOverlap time.Duration = math.MaxInt64
+
 	for _, lr := range lrs {
-		minRangeOverlap := lr.minOverlap()
+		minRangeOverlap := lr.minOverlap(opts)
+		level.Debug(opts.Logger).Log("msg", "Engine is falling back to the store api",
+			"min_range_over_lap", minRangeOverlap)
 		if minRangeOverlap < minLabelsetOverlap {
 			minLabelsetOverlap = minRangeOverlap
 		}
 	}
-
+	level.Debug(opts.Logger).Log("msg", "Engine is falling back to the store api",
+		"label_set_range", len(lrs), "min_range_over_lap", minLabelsetOverlap)
 	return minLabelsetOverlap
 }
 
@@ -154,7 +164,7 @@ func (m DistributedExecutionOptimizer) Optimize(plan parser.Expr, opts *Opts) pa
 			})
 		}
 	}
-	minEngineOverlap := labelRanges.minOverlap()
+	minEngineOverlap := labelRanges.minOverlap(opts)
 
 	TraverseBottomUp(nil, &plan, func(parent, current *parser.Expr) (stop bool) {
 		// If the current operation is not distributive, stop the traversal.
@@ -233,7 +243,13 @@ func (m DistributedExecutionOptimizer) distributeQuery(expr *parser.Expr, engine
 	}
 
 	startOffset := calculateStartOffset(expr, opts.LookbackDelta)
-	if allowedStartOffset < maxDuration(opts.LookbackDelta, startOffset) {
+	maxDuration := maxDuration(opts.LookbackDelta, startOffset)
+	if allowedStartOffset < maxDuration {
+		level.Debug(opts.Logger).Log("msg", "Engine is falling back to the store api",
+			"allowed_start_offset_seconds", allowedStartOffset,
+			"start_offset_seconds", startOffset,
+			"lookback_delta_seconds", opts.LookbackDelta,
+			"max_duration_seconds", maxDuration)
 		return *expr
 	}
 
@@ -252,6 +268,10 @@ func (m DistributedExecutionOptimizer) distributeQuery(expr *parser.Expr, engine
 
 		start, keep := getStartTimeForEngine(e, opts, startOffset, globalMinT)
 		if !keep {
+			lbls := make([]string, 0)
+			for _, lb := range e.LabelSets() {
+				lbls = append(lbls, lb.String())
+			}
 			continue
 		}
 
@@ -263,6 +283,7 @@ func (m DistributedExecutionOptimizer) distributeQuery(expr *parser.Expr, engine
 	}
 
 	if len(remoteQueries) == 0 {
+		level.Debug(opts.Logger).Log("msg", "Noop operation, reomte queriers count is zero")
 		return Noop{}
 	}
 
