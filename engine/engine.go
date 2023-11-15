@@ -265,7 +265,7 @@ func (e *compatibilityEngine) NewInstantQuery(ctx context.Context, q storage.Que
 		End:           ts,
 		Step:          1,
 		LookbackDelta: opts.LookbackDelta,
-		Logger:  e.logger,
+		Logger:        e.logger,
 	})
 	lplan = lplan.Optimize(e.logicalOptimizers)
 
@@ -318,6 +318,7 @@ func (e *compatibilityEngine) NewRangeQuery(ctx context.Context, q storage.Query
 		End:           end,
 		Step:          step,
 		LookbackDelta: opts.LookbackDelta,
+		Logger:        e.logger,
 	})
 	lplan = lplan.Optimize(e.logicalOptimizers)
 
