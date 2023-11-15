@@ -39,10 +39,9 @@ func (trs timeRanges) minOverlap(opts *Opts) time.Duration {
 			"index", i,
 			"end", trs[i-1].end.UTC(),
 			"start", trs[i].start.UTC(),
-			"min_range_over_lap", minEngineOverlap)
+			"over_lap", minEngineOverlap)
 	}
-	level.Debug(opts.Logger).Log("msg", "Engine is falling back to the store api",
-		"min_range_over_lap", minEngineOverlap)
+
 	return minEngineOverlap
 }
 
@@ -55,16 +54,17 @@ func (lrs labelSetRanges) addRange(key string, tr timeRange) {
 // minOverlap returns the smallest overlap between all label set ranges.
 func (lrs labelSetRanges) minOverlap(opts *Opts) time.Duration {
 	var minLabelsetOverlap time.Duration = math.MaxInt64
-	level.Debug(opts.Logger).Log("msg", "Engine is falling back to the store api",
-		"label_set_range", len(lrs))
 
 	for _, lr := range lrs {
 		minRangeOverlap := lr.minOverlap(opts)
+		level.Debug(opts.Logger).Log("msg", "Engine is falling back to the store api",
+			"min_range_over_lap", minRangeOverlap)
 		if minRangeOverlap < minLabelsetOverlap {
 			minLabelsetOverlap = minRangeOverlap
 		}
 	}
-
+	level.Debug(opts.Logger).Log("msg", "Engine is falling back to the store api",
+		"label_set_range", len(lrs), "min_range_over_lap", minLabelsetOverlap)
 	return minLabelsetOverlap
 }
 
@@ -246,10 +246,10 @@ func (m DistributedExecutionOptimizer) distributeQuery(expr *parser.Expr, engine
 	maxDuration := maxDuration(opts.LookbackDelta, startOffset)
 	if allowedStartOffset < maxDuration {
 		level.Debug(opts.Logger).Log("msg", "Engine is falling back to the store api",
-			"allowed_start_offset_seconds", allowedStartOffset.Seconds(),
-			"start_offset_seconds", startOffset.Seconds(),
-			"lookback_delta_seconds", opts.LookbackDelta.Seconds(),
-			"max_duration_seconds", maxDuration.Seconds())
+			"allowed_start_offset_seconds", allowedStartOffset,
+			"start_offset_seconds", startOffset,
+			"lookback_delta_seconds", opts.LookbackDelta,
+			"max_duration_seconds", maxDuration)
 		return *expr
 	}
 
@@ -272,13 +272,6 @@ func (m DistributedExecutionOptimizer) distributeQuery(expr *parser.Expr, engine
 			for _, lb := range e.LabelSets() {
 				lbls = append(lbls, lb.String())
 			}
-			level.Debug(opts.Logger).Log("msg", "Remote Engine not selected",
-				"start_offset_seconds", startOffset.Seconds(),
-				"lookback_delta_seconds", opts.LookbackDelta.Seconds(),
-				"global_minT_seconds", globalMinT,
-				"query_start_time", opts.Start.UTC(),
-				"query_end_time", opts.End.UTC(),
-				"labels", strings.Join(lbls, ","))
 			continue
 		}
 
