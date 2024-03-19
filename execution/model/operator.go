@@ -8,11 +8,15 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/util/stats"
 )
 
 type OperatorTelemetry interface {
 	AddExecutionTimeTaken(time.Duration)
 	ExecutionTimeTaken() time.Duration
+	IncrementSamplesAtStep(samples int, step int)
+	UpdatePeak(samples int)
+	Samples() *stats.QuerySamples
 	Name() string
 }
 
@@ -21,7 +25,6 @@ func NewTelemetry(name string, enabled bool) OperatorTelemetry {
 		return NewTrackedTelemetry(name)
 	}
 	return NewNoopTelemetry(name)
-
 }
 
 type NoopTelemetry struct {
@@ -40,13 +43,21 @@ func (tm *NoopTelemetry) ExecutionTimeTaken() time.Duration {
 	return time.Duration(0)
 }
 
+func (tm *NoopTelemetry) IncrementSamplesAtStep(_, _ int) {}
+
+func (tm *NoopTelemetry) UpdatePeak(_ int) {}
+
+func (tm *NoopTelemetry) Samples() *stats.QuerySamples { return stats.NewQuerySamples(false) }
+
 type TrackedTelemetry struct {
 	name          string
 	ExecutionTime time.Duration
+
+	LoadedSamples *stats.QuerySamples
 }
 
 func NewTrackedTelemetry(name string) *TrackedTelemetry {
-	return &TrackedTelemetry{name: name}
+	return &TrackedTelemetry{name: name, LoadedSamples: stats.NewQuerySamples(false)}
 }
 
 func (ti *TrackedTelemetry) Name() string {
@@ -58,6 +69,16 @@ func (ti *TrackedTelemetry) AddExecutionTimeTaken(t time.Duration) { ti.Executio
 func (ti *TrackedTelemetry) ExecutionTimeTaken() time.Duration {
 	return ti.ExecutionTime
 }
+
+func (ti *TrackedTelemetry) IncrementSamplesAtStep(samples, step int) {
+	ti.LoadedSamples.IncrementSamplesAtStep(step, int64(samples))
+}
+
+func (ti *TrackedTelemetry) UpdatePeak(samples int) {
+	ti.LoadedSamples.UpdatePeak(samples)
+}
+
+func (ti *TrackedTelemetry) Samples() *stats.QuerySamples { return ti.LoadedSamples }
 
 type ObservableVectorOperator interface {
 	VectorOperator
