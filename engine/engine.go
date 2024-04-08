@@ -62,6 +62,9 @@ type Opts struct {
 	// Defaults to 1 hour if not specified.
 	ExtLookbackDelta time.Duration
 
+	// MaxShards is the maximum number of shards to use for parallel execution. If not set, it defaults to GOMAXPROCS/2.
+	MaxShards int
+
 	// EnableXFunctions enables custom xRate, xIncrease and xDelta functions.
 	// This will default to false.
 	EnableXFunctions bool
@@ -177,6 +180,7 @@ func NewWithScanners(opts Opts, scanners engstorage.Scanners) *Engine {
 		noStepSubqueryIntervalFn: func(d time.Duration) time.Duration {
 			return time.Duration(opts.NoStepSubqueryIntervalFn(d.Milliseconds()) * 1000000)
 		},
+		maxShards: opts.MaxShards,
 	}
 }
 
@@ -202,6 +206,7 @@ type Engine struct {
 	metrics           *engineMetrics
 
 	extLookbackDelta         time.Duration
+	maxShards                int
 	enableAnalysis           bool
 	noStepSubqueryIntervalFn func(time.Duration) time.Duration
 }
@@ -356,6 +361,7 @@ func (e *Engine) makeQueryOpts(ctx context.Context, start time.Time, end time.Ti
 		ExtLookbackDelta:         e.extLookbackDelta,
 		EnableAnalysis:           e.enableAnalysis,
 		NoStepSubqueryIntervalFn: e.noStepSubqueryIntervalFn,
+		MaxShards:                e.maxShards,
 	}
 	return qOpts
 }
