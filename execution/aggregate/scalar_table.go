@@ -45,6 +45,17 @@ type scalarTable struct {
 
 func newScalarTables(stepsBatch int, inputCache []uint64, outputCache []*model.Series, aggregation parser.ItemType) ([]aggregateTable, error) {
 	tables := make([]aggregateTable, stepsBatch)
+	if aggregation == parser.SUM {
+		storage := make([]compute.SumAcc, stepsBatch*len(outputCache))
+		for i := range tables {
+			accumulators := make([]compute.Accumulator, len(outputCache))
+			for j := range accumulators {
+				accumulators[j] = &storage[i*len(outputCache)+j]
+			}
+			tables[i] = &scalarTable{ts: math.MinInt64, inputs: inputCache, outputs: outputCache, accumulators: accumulators}
+		}
+		return tables, nil
+	}
 	for i := range tables {
 		table, err := newScalarTable(inputCache, outputCache, aggregation)
 		if err != nil {
